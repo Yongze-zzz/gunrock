@@ -40,8 +40,11 @@ struct main_struct {
   cudaError_t
   operator()(util::Parameters &parameters, VertexT v, SizeT s, ValueT val) {
     typedef typename app::TestGraph<VertexT, SizeT, ValueT,
-                                    graph::HAS_EDGE_VALUES | graph::HAS_CSR>
-        GraphT;
+                                graph::HAS_EDGE_VALUES | graph::HAS_CSR | graph::HAS_DYN>
+    GraphT;
+    // typedef typename app::TestGraph<VertexT, SizeT, ValueT,
+    //                                 graph::HAS_EDGE_VALUES | graph::HAS_CSR>
+    //     GraphT;
     typedef typename GraphT::CsrT CsrT;
 
     cudaError_t retval = cudaSuccess;
@@ -51,8 +54,8 @@ struct main_struct {
     cpu_timer.Start();
     GUARD_CU(graphio::LoadGraph(parameters, graph));
     // force edge values to be 1, don't enable this unless you really want to
-    // for (SizeT e=0; e < graph.edges; e++)
-    //    graph.CsrT::edge_values[e] = 1;
+    for (SizeT e=0; e < graph.edges; e++)
+       graph.CsrT::edge_values[e] = 1;
     cpu_timer.Stop();
     parameters.Set("load-time", cpu_timer.ElapsedMillis());
     // GUARD_CU(graph.CsrT::edge_values.Print("", 100));

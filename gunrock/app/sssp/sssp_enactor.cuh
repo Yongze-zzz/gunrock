@@ -77,7 +77,7 @@ struct SSSPIterationLoop
     auto &labels = data_slice.labels;
     auto &preds = data_slice.preds;
     // auto         &row_offsets        =   graph.CsrT::row_offsets;
-    auto &weights = graph.CsrT::edge_values;
+    // auto &weights = graph.CsrT::edge_values;
     auto &original_vertex = graph.GpT::original_vertex;
     auto &frontier = enactor_slice.frontier;
     auto &oprtr_parameters = enactor_slice.oprtr_parameters;
@@ -85,16 +85,16 @@ struct SSSPIterationLoop
     // auto         &stream             =   enactor_slice.stream;
     auto &iteration = enactor_stats.iteration;
 
-    // The advance operation
+    //code by yongze
     auto advance_op =
-        [distances, weights, original_vertex, preds] __host__ __device__(
-            const VertexT &src, VertexT &dest, const SizeT &edge_id,
+        [distances, original_vertex, preds] __host__ __device__(
+            const VertexT &src, VertexT &dest, const ValueT &edge_value,const SizeT &edge_id,
             const VertexT &input_item, const SizeT &input_pos,
             SizeT &output_pos) -> bool {
       ValueT src_distance = Load<cub::LOAD_CG>(distances + src);
-      ValueT edge_weight = Load<cub::LOAD_CS>(weights + edge_id);
-      ValueT new_distance = src_distance + edge_weight;
-
+      // ValueT edge_weight = Load<cub::LOAD_CS>(edge_value + edge_id);
+      // ValueT new_distance = src_distance + edge_weight;
+      ValueT new_distance = src_distance + edge_value;
       // Check if the destination node has been claimed as someone's child
       ValueT old_distance = atomicMin(distances + dest, new_distance);
 
@@ -108,6 +108,29 @@ struct SSSPIterationLoop
       }
       return false;
     };
+    // The advance operation
+    // auto advance_op =
+    //     [distances, weights, original_vertex, preds] __host__ __device__(
+    //         const VertexT &src, VertexT &dest, const SizeT &edge_id,
+    //         const VertexT &input_item, const SizeT &input_pos,
+    //         SizeT &output_pos) -> bool {
+    //   ValueT src_distance = Load<cub::LOAD_CG>(distances + src);
+    //   ValueT edge_weight = Load<cub::LOAD_CS>(weights + edge_id);
+    //   ValueT new_distance = src_distance + edge_weight;
+
+    //   // Check if the destination node has been claimed as someone's child
+    //   ValueT old_distance = atomicMin(distances + dest, new_distance);
+
+    //   if (new_distance < old_distance) {
+    //     if (!preds.isEmpty()) {
+    //       VertexT pred = src;
+    //       if (!original_vertex.isEmpty()) pred = original_vertex[src];
+    //       Store(preds + dest, pred);
+    //     }
+    //     return true;
+    //   }
+    //   return false;
+    // };
 
     // The filter operation
     auto filter_op = [labels, iteration] __host__ __device__(
@@ -123,7 +146,7 @@ struct SSSPIterationLoop
     oprtr_parameters.label = iteration + 1;
     // Call the advance operator, using the advance operation
     GUARD_CU(oprtr::Advance<oprtr::OprtrType_V2V>(
-        graph.csr(), frontier.V_Q(), frontier.Next_V_Q(), oprtr_parameters,
+        graph.dyn(), frontier.V_Q(), frontier.Next_V_Q(), oprtr_parameters,
         advance_op, filter_op));
 
     if (oprtr_parameters.advance_mode != "LB_CULL" &&
@@ -131,7 +154,7 @@ struct SSSPIterationLoop
       frontier.queue_reset = false;
       // Call the filter operator, using the filter operation
       GUARD_CU(oprtr::Filter<oprtr::OprtrType_V2V>(
-          graph.csr(), frontier.V_Q(), frontier.Next_V_Q(), oprtr_parameters,
+          graph.dyn(), frontier.V_Q(), frontier.Next_V_Q(), oprtr_parameters,
           filter_op));
     }
 

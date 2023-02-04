@@ -135,6 +135,25 @@ struct Problem : ProblemBase<_GraphT, _FLAG> {
       return retval;
     }  // Init
 
+    //code by yongze
+    cudaError_t Update(GraphT &sub_graph, int num_gpus = 1, int gpu_idx = 0,
+                        util::Location target = util::DEVICE,
+                        ProblemFlag flag = Problem_None) {
+
+      cudaError_t retval = cudaSuccess;
+      auto &sub_graph_dyn = sub_graph.dyn();
+      GUARD_CU(distances.Release(target));
+      GUARD_CU(labels.Release(target));
+      GUARD_CU(preds.Release(target));
+      GUARD_CU(temp_preds.Release(target));
+      GUARD_CU(distances.Allocate(sub_graph_dyn.nodes, target));
+      GUARD_CU(labels.Allocate(sub_graph_dyn.nodes, target));
+      if (flag & Mark_Predecessors) {
+        GUARD_CU(preds.Allocate(sub_graph_dyn.nodes, target));
+        GUARD_CU(temp_preds.Allocate(sub_graph_dyn.nodes, target));
+      }
+      return retval;
+    }
     /**
      * @brief Reset problem function. Must be called prior to each run.
      * @param[in] target      Targeting device location
@@ -331,6 +350,24 @@ struct Problem : ProblemBase<_GraphT, _FLAG> {
     }  // end for (gpu)
 
     return retval;
+  }
+    //code by yongze
+  cudaError_t Update(util::Array1D<SizeT, PairT> &edges_batch,
+                               util::Array1D<SizeT, ValueT> &edges_batch_values,
+                               SizeT batch_size, bool directed_batch = true,
+                               util::Location target = util::DEVICE){
+      cudaError_t retval = cudaSuccess;
+      for(int gpu = 0; gpu < this->num_gpus; gpu++){
+        
+        auto &graph_dyn = (this->sub_graphs[gpu]).dyn();
+        graph_dyn.InsertEdgesBatch(edges_batch, edges_batch_values,
+                                      batch_size, directed_batch,
+                                      util::DEVICE);
+        auto &data_slice = data_slices[gpu][0];
+        GUARD_CU(data_slice.Update(this->sub_graphs[gpu], this->num_gpus,
+                               this->gpu_idx[gpu], target, this->flag));
+      }
+      return retval;
   }
 
   /**

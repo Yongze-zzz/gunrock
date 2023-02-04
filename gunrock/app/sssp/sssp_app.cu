@@ -78,6 +78,32 @@ cudaError_t RunTests(util::Parameters &parameters, GraphT &graph,
   int num_srcs = srcs.size();
   util::Info info("SSSP", parameters, graph);  // initialize Info structure
 
+  //code by yongze
+  auto &graph_csr = graph.csr();
+  auto &result_dyn_graph = graph.dyn();
+  result_dyn_graph.FromCsr(graph_csr);
+    // //code by yongze generate a random batch of edges to insert
+  SizeT nodes = result_dyn_graph.nodes;
+  using PairT = uint2;
+  SizeT batch_size = 1;
+  util::Array1D<SizeT, PairT> edges_batch;
+  util::Array1D<SizeT, ValueT> edges_batch_values;
+  edges_batch.Allocate(batch_size, util::HOST | util::DEVICE);
+  edges_batch_values.Allocate(batch_size, util::HOST | util::DEVICE);
+  std::mt19937 rng(0);
+  VertexT advance_src = srcs[0];
+  printf("===Insert edges===\n");
+  for (auto e = 0; e < batch_size; e++) {
+    VertexT edge_src = advance_src;
+    VertexT edge_dst = (rng() % (nodes - 1)) + 2;
+    printf("insert src %d, dst %d\n",edge_src, edge_dst);
+    edges_batch[e] = make_uint2(edge_src, edge_dst);
+    edges_batch_values[e] = 1;
+  }
+  // move to GPU
+  edges_batch.Move(util::HOST, util::DEVICE);
+  edges_batch_values.Move(util::HOST, util::DEVICE);
+  bool directed_batch = true;
   // Allocate host-side array (for both reference and GPU-computed results)
   ValueT *h_distances = new ValueT[graph.nodes];
   VertexT *h_preds = (mark_pred) ? new VertexT[graph.nodes] : NULL;
